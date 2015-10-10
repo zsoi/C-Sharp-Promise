@@ -990,5 +990,24 @@ namespace RSG.Tests
             Assert.Equal(0, callback);
             Assert.Equal(1, errorCallback);
         }
+
+		[Fact]
+		public void exception_in_nested_promise_catched_in_parent_promise()
+		{
+			var promise = new Promise();
+			var innerPromise = new Promise();
+			Exception exception = null;
+
+			promise
+				.Then(() => innerPromise)
+				.Catch( (ex) => {
+					exception = ex;
+				});
+
+			var rejectionException = new Exception();
+			innerPromise.Reject(rejectionException);
+
+			Assert.Equal(rejectionException, exception);
+		}
     }
 }
