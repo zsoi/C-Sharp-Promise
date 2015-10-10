@@ -991,23 +991,125 @@ namespace RSG.Tests
             Assert.Equal(1, errorCallback);
         }
 
-		[Fact]
-		public void exception_in_nested_promise_catched_in_parent_promise()
-		{
-			var promise = new Promise();
-			var innerPromise = new Promise();
-			Exception exception = null;
+        [Fact]
+        public void exception_in_nested_promise_catched_in_parent_promise()
+        {
+            var promise = new Promise();
+            Exception exception = null;
+            var rejectionException = new Exception();
 
-			promise
-				.Then(() => innerPromise)
-				.Catch( (ex) => {
-					exception = ex;
-				});
+            promise
+                .Then(() =>
+                {
+                    // The rejection should also reject the parent promise (as it is chained)
+                    // and thus bubble up in the catch handler below
+                    return Promise.Resolved().Then(
+                        () => { throw rejectionException; }
+                    );
+                })
+                .Catch((ex) =>
+                {
+                    exception = ex;
+                });
 
-			var rejectionException = new Exception();
-			innerPromise.Reject(rejectionException);
+            promise.Resolve();
 
-			Assert.Equal(rejectionException, exception);
-		}
+            Assert.Equal(rejectionException, exception);
+        }
+
+        [Fact]
+        public void exception_in_nested_promise_catched_in_parent_promise_skipping_resolve_handlers()
+        {
+            var promise = new Promise();
+            Exception exception = null;
+            var rejectionException = new Exception();
+            bool chainedResolveHandlerCalled = false;
+
+            promise
+                .Then(() =>
+                {
+                    // The rejection should also reject the parent promise (as it is chained)
+                    // and thus bubble up in the catch handler below
+                    return Promise.Resolved().Then(
+                        () => { throw rejectionException; }
+                    ).Then(() =>
+                    {
+                        chainedResolveHandlerCalled = true;
+                    });
+                })
+                .Catch((ex) =>
+                {
+                    exception = ex;
+                });
+
+            promise.Resolve();
+
+            Assert.Equal(false, chainedResolveHandlerCalled);
+            Assert.Equal(rejectionException, exception);
+        }
+
+        [Fact]
+        public void exception_thrown_is_catched_by_intermediate_handler()
+        {
+            var promise = new Promise();
+            Exception exception = null;
+            var rejectionException = new Exception();
+            bool resolveHandlerAfterCatchCalled = false;
+
+            promise
+                .Then(() =>
+                {
+                    throw rejectionException;
+                })
+                .Catch((ex) =>
+                {
+                    exception = ex;
+                    // We do not trigger a rejection here, so the
+                    // promise returned by "catch" will not be rejected!
+                })
+                .Then(() =>
+                {
+                    resolveHandlerAfterCatchCalled = true;
+                });
+
+            promise.Resolve();
+
+            Assert.Equal(true, resolveHandlerAfterCatchCalled);
+            Assert.Equal(rejectionException, exception);
+        }
+
+        [Fact]
+        public void exception_thrown_is_catched_by_intermediate_handler_full_thenable()
+        {
+            Exception exception = null;
+
+            var rejectionException = new Exception();
+            bool resolveHandlerAfterCatchCalled = false;
+
+
+            var promise = new Promise();
+
+            // Speciality here is that the combined Then(resolve, reject) is used instead of
+            // a chained Then/Catch
+            promise
+                .Then(() =>
+                {
+                    throw rejectionException;
+                }, (ex) =>
+                {
+                    exception = ex;
+                    // We do not trigger a rejection here, so the
+                    // promise returned by "catch" will not be rejected!
+                })
+                .Then(() =>
+                {
+                    resolveHandlerAfterCatchCalled = true;
+                });
+
+            promise.Resolve();
+
+            Assert.Equal(true, resolveHandlerAfterCatchCalled);
+            Assert.Equal(rejectionException, exception);
+        }
     }
 }
